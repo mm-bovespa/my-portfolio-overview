@@ -9,15 +9,15 @@ import sys
 from portfolio_overview import __version__
 from portfolio_overview.display import format_overview
 from portfolio_overview.loader import load_holdings
-from portfolio_overview.prices import enrich_holdings, fetch_prices
+from portfolio_overview.prices import enrich_holdings, fetch_eurusd, fetch_prices
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="portfolio-overview",
         description=(
-            "Terminal overview of share holdings: live prices, market values, "
-            "daily change %, and portfolio weights."
+            "Terminal overview of share holdings: live prices (native + EUR via "
+            "EURUSD), market values in EUR, daily change %, and portfolio weights."
         ),
     )
     p.add_argument(
@@ -66,12 +66,16 @@ def main(argv: list[str] | None = None) -> int:
 
     tickers = [h["ticker"] for h in holdings]
     try:
+        eurusd = fetch_eurusd()
         prices = fetch_prices(tickers)
     except ImportError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
-    rows = enrich_holdings(holdings, prices)
+    rows = enrich_holdings(holdings, prices, eurusd)
     if not rows:
         print(
             "Could not price any holdings. Check tickers / network / yfinance.",
@@ -79,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    print(format_overview(rows, source=str(path)))
+    print(format_overview(rows, source=str(path), eurusd=eurusd))
     return 0
 
 

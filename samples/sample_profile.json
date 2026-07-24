@@ -10,30 +10,30 @@
     {
       "ticker": "AAPL",
       "shares": 10,
-      "avg_cost_usd": 150.0,
+      "avg_cost_eur": 150.0,
       "buy_date": "2022-01-15",
       "notes": "sample"
     },
     {
       "ticker": "MSFT",
       "shares": 5,
-      "avg_cost_usd": 280.0,
+      "avg_cost_eur": 280.0,
       "buy_date": "2021-06-01"
     },
     {
       "ticker": "PG",
       "shares": 20,
-      "avg_cost_usd": 140.0
+      "avg_cost_eur": 140.0
     },
     {
       "ticker": "XOM",
       "shares": 15,
-      "avg_cost_usd": 90.0
+      "avg_cost_eur": 90.0
     },
     {
       "ticker": "JNJ",
       "shares": 8,
-      "avg_cost_usd": 160.0
+      "avg_cost_eur": 160.0
     }
   ],
   "learning_goals": ["demo"]

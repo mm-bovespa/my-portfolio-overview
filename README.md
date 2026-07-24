@@ -8,12 +8,16 @@ Loads positions from the local **[my-finance-profile](https://github.com)** skil
 |--------|---------|
 | Ticker | Symbol |
 | Qty | Number of shares |
-| Price | Latest price |
-| Market Value | Qty × price |
+| Ccy | Quote currency of the live price (USD / EUR / …) |
+| Price | Latest price in quote currency |
+| Price € | Same price converted to EUR via live **EURUSD** |
+| Value € | Qty × Price € |
 | Day % | Daily change vs previous close |
-| Weight % | Position as % of portfolio |
+| Wt % | Weight of EUR market value |
 
-Plus **total portfolio value**.
+Plus **total portfolio value in EUR** (and USD equivalent at the same FX).
+
+**Buy prices** in the profile (`avg_cost_eur`) are always stored in **euros**.
 
 > **v1 scope:** shares only. Long-term vision is a 360° view (real estate, cash, brokers, dividends, strategy tools). Architecture keeps personal data separate from this public CLI.
 
@@ -79,7 +83,7 @@ portfolio-overview --sample
     {
       "ticker": "AAPL",
       "shares": 12,
-      "avg_cost_usd": 148.5,
+      "avg_cost_eur": 148.5,
       "buy_date": "2022-06-15",
       "notes": "optional"
     }
@@ -88,7 +92,7 @@ portfolio-overview --sample
 ```
 
 - **Required for the overview:** `ticker`, `shares` (alias: `quantity`)
-- **Optional:** `avg_cost_usd`, `buy_date`, `notes`
+- **Optional:** `avg_cost_eur` (always euros), `buy_date`, `notes`
 - Rows without a valid quantity are **skipped** with a warning
 
 ### Managing holdings (my-finance-profile helper)
@@ -138,6 +142,27 @@ my-portfolio-overview/
 Personal **mutations** of holdings stay in the skill/helper; this app **reads** and **displays**.
 
 ---
+
+## Web dashboard
+
+Local webpage with live prices, EUR conversion, expandable **purchase lots**, total return %, and IRR:
+
+```bash
+# from project root, with venv active + yfinance installed
+python -m portfolio_overview.server
+```
+
+Then open: **http://127.0.0.1:8765/**
+
+Options:
+
+```bash
+python -m portfolio_overview.server --port 8765
+python -m portfolio_overview.server --sample          # demo data
+python -m portfolio_overview.server --no-browser
+```
+
+API: `GET /api/portfolio` → JSON (summary + positions + lots).
 
 ## Tests
 

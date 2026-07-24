@@ -81,10 +81,13 @@ def extract_holdings(profile: dict[str, Any]) -> list[dict[str, Any]]:
             skipped.append(ticker)
             continue
         holding: dict[str, Any] = {"ticker": ticker, "shares": shares}
-        cost_raw = item.get("avg_cost_usd", item.get("avg_buy_price"))
+        # Buy price always interpreted as EUR (legacy avg_cost_usd migrated)
+        cost_raw = item.get(
+            "avg_cost_eur", item.get("avg_cost_usd", item.get("avg_buy_price"))
+        )
         if cost_raw not in (None, ""):
             try:
-                holding["avg_cost_usd"] = float(cost_raw)
+                holding["avg_cost_eur"] = float(cost_raw)
             except (TypeError, ValueError):
                 pass
         if item.get("buy_date"):

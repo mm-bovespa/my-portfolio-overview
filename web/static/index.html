@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portfolio Overview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surface: { DEFAULT: '#0f1419', card: '#1a2332', line: '#2a3544', muted: '#8b9cb3' },
+            accent: { DEFAULT: '#3b82f6', good: '#22c55e', bad: '#ef4444', warn: '#f59e0b' }
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'], mono: ['JetBrains Mono', 'ui-monospace', 'monospace'] }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; background: #0b0f14; color: #e7eef7; }
+    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    tr.lot-row { display: none; }
+    tr.lot-row.open { display: table-row; }
+    tr.pos-row { cursor: pointer; }
+    tr.pos-row:hover { background: rgba(59,130,246,0.08); }
+    tr.pos-row.expanded { background: rgba(59,130,246,0.12); }
+    .spin { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="max-w-[1400px] mx-auto px-4 py-6 md:px-8 md:py-8">
+    <!-- Header -->
+    <header class="flex flex-wrap items-start justify-between gap-4 mb-8">
+      <div>
+        <p class="text-accent text-xs font-semibold tracking-widest uppercase mb-1">my-portfolio-overview</p>
+        <h1 class="text-2xl md:text-3xl font-bold tracking-tight">Portfolio Dashboard</h1>
+        <p id="meta" class="text-surface-muted text-sm mt-2 mono">Loading…</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="btn-refresh" class="px-4 py-2 rounded-lg bg-accent hover:bg-blue-500 text-white text-sm font-medium transition">
+          Refresh prices
+        </button>
+      </div>
+    </header>
+
+    <!-- Loading / error -->
+    <div id="status" class="mb-6 hidden"></div>
+
+    <!-- Summary cards -->
+    <section id="cards" class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-8"></section>
+
+    <!-- Holdings -->
+    <section class="bg-surface-card border border-surface-line rounded-xl overflow-hidden shadow-xl">
+      <div class="px-4 py-3 border-b border-surface-line flex flex-wrap items-center justify-between gap-2">
+        <h2 class="font-semibold">Holdings &amp; purchase lots</h2>
+        <p class="text-xs text-surface-muted">Click a row to expand lots · Tot % &amp; IRR include dividends</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-surface-muted text-xs uppercase tracking-wide bg-black/20">
+            <tr>
+              <th class="text-left px-3 py-2 font-medium">Ticker</th>
+              <th class="text-right px-3 py-2 font-medium">Qty</th>
+              <th class="text-right px-3 py-2 font-medium">Price €</th>
+              <th class="text-right px-3 py-2 font-medium">MV €</th>
+              <th class="text-right px-3 py-2 font-medium">Day %</th>
+              <th class="text-right px-3 py-2 font-medium">Wt %</th>
+              <th class="text-right px-3 py-2 font-medium">Cost €</th>
+              <th class="text-right px-3 py-2 font-medium">Div €</th>
+              <th class="text-right px-3 py-2 font-medium">Profit €</th>
+              <th class="text-right px-3 py-2 font-medium">Tot %</th>
+              <th class="text-right px-3 py-2 font-medium">IRR %/y</th>
+              <th class="text-left px-3 py-2 font-medium">Wtd buy</th>
+              <th class="text-right px-3 py-2 font-medium">Lots</th>
+            </tr>
+          </thead>
+          <tbody id="tbody" class="divide-y divide-surface-line/60"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="mt-8 text-xs text-surface-muted space-y-1">
+      <p>Prices via yfinance · FX EURUSD · Buy prices and dividends in EUR · Not financial advice.</p>
+      <p>Lot IRR uses lot age; ticker TOTAL IRR uses cost-weighted age. Tot % = (MV + dividends) / cost − 1.</p>
+    </footer>
+  </div>
+
+  <script>
+    const fmt = (n, d = 2) => {
+      if (n === null || n === undefined || Number.isNaN(n)) return '—';
+      return Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+    };
+    const fmtPct = (n, d = 1) => {
+      if (n === null || n === undefined || Number.isNaN(n)) return '—';
+      const s = (n >= 0 ? '+' : '') + fmt(n, d) + '%';
+      return s;
+    };
+    const clsPct = (n) => {
+      if (n === null || n === undefined || Number.isNaN(n)) return 'text-surface-muted';
+      return n >= 0 ? 'text-accent-good' : 'text-accent-bad';
+    };
+
+    function card(label, value, sub = '') {
+      return `<div class="bg-surface-card border border-surface-line rounded-xl p-4">
+        <p class="text-xs text-surface-muted uppercase tracking-wide mb-1">${label}</p>
+        <p class="text-lg md:text-xl font-semibold mono">${value}</p>
+        ${sub ? `<p class="text-xs text-surface-muted mt-1 mono">${sub}</p>` : ''}
+      </div>`;
+    }
+
+    function setStatus(html, type = 'info') {
+      const el = document.getElementById('status');
+      if (!html) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+      const colors = {
+        info: 'bg-blue-500/10 border-blue-500/30 text-blue-200',
+        err: 'bg-red-500/10 border-red-500/30 text-red-200',
+        load: 'bg-surface-card border-surface-line text-surface-muted'
+      };
+      el.className = `mb-6 rounded-lg border px-4 py-3 text-sm ${colors[type] || colors.info}`;
+      el.innerHTML = html;
+      el.classList.remove('hidden');
+    }
+
+    function render(data) {
+      const s = data.summary || {};
+      document.getElementById('meta').textContent =
+        `As of ${data.as_of} · EURUSD ${fmt(data.eurusd, 4)} · Source: ${data.source}`;
+
+      document.getElementById('cards').innerHTML = [
+        card('Market value', `€ ${fmt(s.market_value_eur, 0)}`, `$ ${fmt(s.market_value_usd, 0)}`),
+        card('Cost basis', s.cost_basis_eur != null ? `€ ${fmt(s.cost_basis_eur, 0)}` : '—', 'Lots with buy data'),
+        card('Dividends', s.dividends_eur != null ? `€ ${fmt(s.dividends_eur, 0)}` : '—', 'Since purchase (stored)'),
+        card('Total profit', s.profit_eur != null ? `€ ${fmt(s.profit_eur, 0)}` : '—', 'Price gain + dividends'),
+        card('Total return', s.total_return_pct != null ? fmtPct(s.total_return_pct, 1) : '—', 'Portfolio (lots only)'),
+        card('IRR / year', s.irr_annual_pct != null ? fmtPct(s.irr_annual_pct, 2) : '—', 'Cost-weighted age'),
+      ].join('');
+
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = '';
+
+      (data.positions || []).forEach((p, idx) => {
+        const r = p.returns || {};
+        const hasLots = (p.lots && p.lots.length) || p.lot_count > 0;
+        const tr = document.createElement('tr');
+        tr.className = 'pos-row';
+        tr.dataset.idx = String(idx);
+        tr.innerHTML = `
+          <td class="px-3 py-2.5 font-semibold">${p.ticker}${hasLots ? ' <span class="text-surface-muted text-xs">▾</span>' : ''}</td>
+          <td class="px-3 py-2.5 text-right mono">${fmt(p.shares, p.shares % 1 ? 2 : 0)}</td>
+          <td class="px-3 py-2.5 text-right mono">${fmt(p.price_eur)}</td>
+          <td class="px-3 py-2.5 text-right mono font-medium">${fmt(p.market_value_eur, 0)}</td>
+          <td class="px-3 py-2.5 text-right mono ${clsPct(p.day_change_pct)}">${fmtPct(p.day_change_pct, 2)}</td>
+          <td class="px-3 py-2.5 text-right mono">${fmt(p.weight_pct, 1)}%</td>
+          <td class="px-3 py-2.5 text-right mono">${r.cost_basis_eur != null ? fmt(r.cost_basis_eur, 0) : '—'}</td>
+          <td class="px-3 py-2.5 text-right mono">${r.dividends_eur_total != null ? fmt(r.dividends_eur_total, 0) : '—'}</td>
+          <td class="px-3 py-2.5 text-right mono ${clsPct(r.profit_eur)}">${r.profit_eur != null ? fmt(r.profit_eur, 0) : '—'}</td>
+          <td class="px-3 py-2.5 text-right mono ${clsPct(r.total_return_pct)}">${r.total_return_pct != null ? fmtPct(r.total_return_pct, 1) : '—'}</td>
+          <td class="px-3 py-2.5 text-right mono ${clsPct(r.irr_annual_pct)}">${r.irr_annual_pct != null ? fmtPct(r.irr_annual_pct, 2) : '—'}</td>
+          <td class="px-3 py-2.5 mono text-xs">${p.avg_buy_date_weighted || '—'}</td>
+          <td class="px-3 py-2.5 text-right mono">${p.lot_count || 0}</td>
+        `;
+        tbody.appendChild(tr);
+
+        if (p.lots && p.lots.length) {
+          // Lot header
+          const head = document.createElement('tr');
+          head.className = `lot-row lot-${idx} bg-black/30 text-xs text-surface-muted`;
+          head.innerHTML = `<td colspan="13" class="px-3 py-2">
+            <div class="pl-4 mono">
+              Purchase lots for <span class="text-white font-medium">${p.ticker}</span>
+              · first ${p.buy_date_first || '—'}
+              · wtd buy ${p.avg_buy_date_weighted || '—'}
+            </div>
+          </td>`;
+          tbody.appendChild(head);
+
+          const colHead = document.createElement('tr');
+          colHead.className = `lot-row lot-${idx} bg-black/20 text-xs text-surface-muted`;
+          colHead.innerHTML = `
+            <td class="px-3 py-1 pl-8">Buy date</td>
+            <td class="px-3 py-1 text-right">Qty</td>
+            <td class="px-3 py-1 text-right">Buy €</td>
+            <td class="px-3 py-1 text-right">Cost €</td>
+            <td class="px-3 py-1 text-right">MV €</td>
+            <td class="px-3 py-1 text-right">Days</td>
+            <td class="px-3 py-1 text-right">Div €</td>
+            <td class="px-3 py-1 text-right">Profit €</td>
+            <td class="px-3 py-1 text-right">Tot %</td>
+            <td class="px-3 py-1 text-right">IRR %/y</td>
+            <td colspan="3"></td>
+          `;
+          tbody.appendChild(colHead);
+
+          p.lots.forEach(lot => {
+            const lr = document.createElement('tr');
+            lr.className = `lot-row lot-${idx} bg-black/10 text-xs`;
+            lr.innerHTML = `
+              <td class="px-3 py-1.5 pl-8 mono">${lot.buy_date}</td>
+              <td class="px-3 py-1.5 text-right mono">${fmt(lot.shares, 2)}</td>
+              <td class="px-3 py-1.5 text-right mono">${fmt(lot.price_eur)}</td>
+              <td class="px-3 py-1.5 text-right mono">${fmt(lot.cost_eur)}</td>
+              <td class="px-3 py-1.5 text-right mono">${fmt(lot.market_value_eur)}</td>
+              <td class="px-3 py-1.5 text-right mono">${fmt(lot.days, 0)}</td>
+              <td class="px-3 py-1.5 text-right mono">${fmt(lot.dividends_eur)}</td>
+              <td class="px-3 py-1.5 text-right mono ${clsPct(lot.profit_eur)}">${fmt(lot.profit_eur)}</td>
+              <td class="px-3 py-1.5 text-right mono ${clsPct(lot.total_return_pct)}">${fmtPct(lot.total_return_pct, 1)}</td>
+              <td class="px-3 py-1.5 text-right mono ${clsPct(lot.irr_annual_pct)}">${lot.irr_annual_pct != null ? fmtPct(lot.irr_annual_pct, 2) : '—'}</td>
+              <td colspan="3"></td>
+            `;
+            tbody.appendChild(lr);
+          });
+        }
+
+        tr.addEventListener('click', () => {
+          if (!hasLots) return;
+          const open = tr.classList.toggle('expanded');
+          document.querySelectorAll(`.lot-${idx}`).forEach(el => {
+            el.classList.toggle('open', open);
+          });
+        });
+      });
+    }
+
+    async function load() {
+      setStatus('<span class="inline-flex items-center gap-2"><span class="spin inline-block w-4 h-4 border-2 border-surface-muted border-t-accent rounded-full"></span> Fetching prices & computing returns…</span>', 'load');
+      try {
+        const res = await fetch('/api/portfolio?_=' + Date.now());
+        if (!res.ok) throw new Error(await res.text() || res.statusText);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        render(data);
+        setStatus('');
+      } catch (e) {
+        setStatus('Failed to load portfolio: ' + e.message, 'err');
+      }
+    }
+
+    document.getElementById('btn-refresh').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>
