@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "my-portfolio-overview"
+version = "0.1.0"
+description = "Simple terminal overview of personal share holdings (yfinance)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Portfolio Overview Contributors" }]
+dependencies = [
+  "yfinance>=0.2.40",
+]
+
+[project.scripts]
+portfolio-overview = "portfolio_overview.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["portfolio_overview*"]
