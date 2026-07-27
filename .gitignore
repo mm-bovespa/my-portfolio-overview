@@ -16,6 +16,13 @@ profile.json
 *.local.json
 .local/
 
+# Dashboard auth hash (password never stored in plaintext)
+.local/auth.json
+
+# Local server logs
+web/server.log
+web/server.err.log
+
 # IDE / OS
 .idea/
 .vscode/

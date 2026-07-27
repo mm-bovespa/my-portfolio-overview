@@ -107,11 +107,37 @@ python "%USERPROFILE%\.grok\skills\my-finance-profile\references\finance_profile
 
 ---
 
+## Web dashboard (password-protected)
+
+```bash
+cd my-portfolio-overview
+.\.venv\Scripts\Activate.ps1   # Windows
+python -m portfolio_overview.server --port 8765
+```
+
+Open **http://127.0.0.1:8765/login** — the dashboard and APIs require a session cookie after login.
+
+**Password setup**
+
+| Method | Effect |
+|--------|--------|
+| First start (no config) | Generates a random password, prints it **once**, saves PBKDF2 hash to `.local/auth.json` |
+| `--password SECRET` | Sets/resets the password and saves the hash |
+| Env `PORTFOLIO_DASHBOARD_PASSWORD` | Same as `--password` |
+
+```bash
+python -m portfolio_overview.server --password "your-strong-secret"
+```
+
+- Only a **hash** is stored (PBKDF2-SHA256); the plaintext password is never written to disk.
+- `.local/auth.json` is **gitignored** — do not commit it.
+- Sessions: HttpOnly cookie, 12h sliding expiry, in-process only.
+
 ## Privacy
 
 - **Never commit** real `profile.json` or broker exports.
 - This repo only ships `samples/sample_profile.json` (fictional positions).
-- `.gitignore` blocks common personal-data filenames.
+- `.gitignore` blocks common personal-data filenames and dashboard auth files.
 
 ---
 
@@ -162,7 +188,13 @@ python -m portfolio_overview.server --sample          # demo data
 python -m portfolio_overview.server --no-browser
 ```
 
-API: `GET /api/portfolio` → JSON (summary + positions + lots).
+APIs:
+- `GET /api/portfolio` → JSON (summary + positions + lots)
+- `GET /api/analysis` → sector/region weights + **performance vs indexes** (1y / 5y / 10y / full IRR)
+
+In the UI: **Analyze Portfolio** opens a popup with:
+- Portfolio vs S&P 500 (SPY), Dow (DIA), Euro Stoxx 50 (FEZ), World (VT) — total return & annualized IRR
+- Sector/region allocation charts (your portfolio only)
 
 ## Tests
 
