@@ -56,8 +56,11 @@ jobs:
           test -f site/data.enc.json
           ls -la site
 
-      - name: Setup Pages
+      - name: Setup Pages (enable if needed)
         uses: actions/configure-pages@v5
+        with:
+          # Auto-enable GitHub Pages for this repo on first deploy
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
