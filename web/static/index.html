@@ -60,6 +60,9 @@
         <p id="meta" class="text-surface-muted text-sm mt-2 mono">Loading…</p>
       </div>
       <div class="flex items-center gap-3 flex-wrap">
+        <button id="btn-ai-rec" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition">
+          AI Recommendations
+        </button>
         <button id="btn-analyze" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition">
           Analyze Portfolio
         </button>
@@ -85,6 +88,23 @@
         </div>
         <div id="analyze-body" class="p-5 space-y-8">
           <p class="text-surface-muted text-sm">Loading analysis…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Recommendations modal -->
+    <div id="ai-modal" class="fixed inset-0 z-50 hidden">
+      <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" id="ai-backdrop"></div>
+      <div class="relative z-10 mx-auto my-4 md:my-8 w-[min(960px,96vw)] max-h-[92vh] overflow-y-auto rounded-2xl border border-violet-500/30 bg-surface-card shadow-2xl">
+        <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-surface-line bg-surface-card/95 px-5 py-4 backdrop-blur">
+          <div>
+            <h2 class="text-lg font-semibold text-violet-200">AI Recommendations</h2>
+            <p id="ai-meta" class="text-xs text-surface-muted mt-0.5">Institutional-grade portfolio critique (xAI Grok)</p>
+          </div>
+          <button id="btn-ai-close" class="rounded-lg px-3 py-1.5 text-sm text-surface-muted hover:bg-white/5 hover:text-white">Close ✕</button>
+        </div>
+        <div id="ai-body" class="p-5">
+          <p class="text-surface-muted text-sm">Loading…</p>
         </div>
       </div>
     </div>
@@ -132,6 +152,7 @@
       { key: 'price_eur', label: 'Price €', align: 'right', type: 'number' },
       { key: 'market_value_eur', label: 'MV €', align: 'right', type: 'number' },
       { key: 'day_change_pct', label: 'Day %', align: 'right', type: 'number' },
+      { key: 'day_change_eur', label: 'Day €', align: 'right', type: 'number' },
       { key: 'weight_pct', label: 'Wt %', align: 'right', type: 'number' },
       { key: 'cost_basis_eur', label: 'Cost €', align: 'right', type: 'number' },
       { key: 'dividends_eur_total', label: 'Div €', align: 'right', type: 'number' },
@@ -184,6 +205,7 @@
         case 'price_eur': return p.price_eur;
         case 'market_value_eur': return p.market_value_eur;
         case 'day_change_pct': return p.day_change_pct;
+        case 'day_change_eur': return p.day_change_eur;
         case 'weight_pct': return p.weight_pct;
         case 'cost_basis_eur': return r.cost_basis_eur;
         case 'dividends_eur_total': return r.dividends_eur_total;
@@ -279,6 +301,7 @@
           <td class="px-3 py-2.5 text-right mono">${fmt(p.price_eur)}</td>
           <td class="px-3 py-2.5 text-right mono font-medium">${fmt(p.market_value_eur, 0)}</td>
           <td class="px-3 py-2.5 text-right mono ${clsPct(p.day_change_pct)}">${fmtPct(p.day_change_pct, 2)}</td>
+          <td class="px-3 py-2.5 text-right mono ${clsPct(p.day_change_eur)}">${p.day_change_eur != null ? ((p.day_change_eur >= 0 ? '+' : '') + fmt(p.day_change_eur, 0)) : '—'}</td>
           <td class="px-3 py-2.5 text-right mono">${fmt(p.weight_pct, 1)}%</td>
           <td class="px-3 py-2.5 text-right mono">${r.cost_basis_eur != null ? fmt(r.cost_basis_eur, 0) : '—'}</td>
           <td class="px-3 py-2.5 text-right mono">${r.dividends_eur_total != null ? fmt(r.dividends_eur_total, 0) : '—'}</td>
@@ -293,7 +316,7 @@
         if (p.lots && p.lots.length) {
           const head = document.createElement('tr');
           head.className = `lot-row lot-${idx} bg-black/30 text-xs text-surface-muted`;
-          head.innerHTML = `<td colspan="13" class="px-3 py-2">
+          head.innerHTML = `<td colspan="14" class="px-3 py-2">
             <div class="pl-4 mono">
               Purchase lots for <span class="text-white font-medium">${p.ticker}</span>
               · first ${p.buy_date_first || '—'}
@@ -315,7 +338,7 @@
             <td class="px-3 py-1 text-right">Profit €</td>
             <td class="px-3 py-1 text-right">Tot %</td>
             <td class="px-3 py-1 text-right">IRR %/y</td>
-            <td colspan="3"></td>
+            <td colspan="4"></td>
           `;
           tbody.appendChild(colHead);
 
@@ -333,7 +356,7 @@
               <td class="px-3 py-1.5 text-right mono ${clsPct(lot.profit_eur)}">${fmt(lot.profit_eur)}</td>
               <td class="px-3 py-1.5 text-right mono ${clsPct(lot.total_return_pct)}">${fmtPct(lot.total_return_pct, 1)}</td>
               <td class="px-3 py-1.5 text-right mono ${clsPct(lot.irr_annual_pct)}">${lot.irr_annual_pct != null ? fmtPct(lot.irr_annual_pct, 2) : '—'}</td>
-              <td colspan="3"></td>
+              <td colspan="4"></td>
             `;
             tbody.appendChild(lr);
           });
@@ -608,11 +631,121 @@
       }
     }
 
+    function openAiModal() {
+      document.getElementById('ai-modal').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeAiModal() {
+      document.getElementById('ai-modal').classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    /** Lightweight markdown → HTML for headings, lists, bold */
+    function simpleMarkdown(md) {
+      const lines = String(md || '').split('\n');
+      const out = [];
+      let inList = false;
+      const flushList = () => {
+        if (inList) { out.push('</ul>'); inList = false; }
+      };
+      for (const raw of lines) {
+        const line = raw.replace(/\r$/, '');
+        if (/^#{1,3}\s+/.test(line)) {
+          flushList();
+          const level = (line.match(/^#+/) || ['#'])[0].length;
+          const text = line.replace(/^#{1,3}\s+/, '');
+          out.push(`<h${Math.min(level + 1, 4)} class="font-semibold text-white mt-5 mb-2">${escapeHtml(text)}</h${Math.min(level + 1, 4)}>`);
+          continue;
+        }
+        if (/^[-*]\s+/.test(line) || /^\d+\.\s+/.test(line)) {
+          if (!inList) { out.push('<ul class="list-disc pl-5 space-y-1 my-2 text-sm text-slate-200">'); inList = true; }
+          const text = line.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '');
+          out.push(`<li>${inlineMd(text)}</li>`);
+          continue;
+        }
+        flushList();
+        if (!line.trim()) {
+          out.push('<div class="h-2"></div>');
+          continue;
+        }
+        out.push(`<p class="text-sm text-slate-200 leading-relaxed mb-2">${inlineMd(line)}</p>`);
+      }
+      flushList();
+      return out.join('\n');
+    }
+    function inlineMd(s) {
+      let t = escapeHtml(s);
+      t = t.replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>');
+      t = t.replace(/`([^`]+)`/g, '<code class="mono text-xs bg-black/40 px-1 rounded">$1</code>');
+      return t;
+    }
+
+    async function loadAiRecommendations() {
+      openAiModal();
+      document.getElementById('ai-meta').textContent = 'Building portfolio snapshot + calling xAI Grok…';
+      document.getElementById('ai-body').innerHTML =
+        '<p class="text-surface-muted text-sm flex items-center gap-2"><span class="spin inline-block w-4 h-4 border-2 border-surface-muted border-t-violet-400 rounded-full"></span> Running institutional analysis (may take 1–3 minutes)…</p>';
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 360000);
+      try {
+        const res = await fetch('/api/ai-recommendations?_=' + Date.now(), {
+          method: 'POST',
+          credentials: 'same-origin',
+          signal: ctrl.signal,
+        });
+        if (res.status === 401) {
+          location.replace('/login');
+          return;
+        }
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch {
+          throw new Error('Invalid JSON from server');
+        }
+        if (!res.ok || data.error) {
+          throw new Error(data.error || res.statusText);
+        }
+        const s = data.summary || {};
+        document.getElementById('ai-meta').textContent =
+          `Model ${data.model || '—'} · as of ${data.as_of || '—'} · MV €${Number(s.market_value_eur || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+        document.getElementById('ai-body').innerHTML = `
+          <div class="prose-invert max-w-none">
+            ${simpleMarkdown(data.analysis || '')}
+          </div>
+          <p class="text-xs text-surface-muted mt-8 border-t border-surface-line pt-4">${escapeHtml(data.disclaimer || '')}</p>
+        `;
+      } catch (e) {
+        const msg = e.name === 'AbortError'
+          ? 'Timed out after 6 minutes. Try again or check XAI_API_KEY / network.'
+          : (e.message || String(e));
+        document.getElementById('ai-body').innerHTML =
+          `<p class="text-red-300 text-sm">AI Recommendations failed: ${escapeHtml(msg)}</p>
+           <p class="text-xs text-surface-muted mt-3">Set <code class="mono">XAI_API_KEY</code> in <code class="mono">C:\\projects\\my-portfolio-overview\\.env</code> (from console.x.ai), then restart the server.</p>`;
+        document.getElementById('ai-meta').textContent = 'Error';
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
     document.getElementById('btn-analyze').addEventListener('click', loadAnalysis);
     document.getElementById('btn-analyze-close').addEventListener('click', closeAnalyzeModal);
     document.getElementById('analyze-backdrop').addEventListener('click', closeAnalyzeModal);
+    document.getElementById('btn-ai-rec').addEventListener('click', loadAiRecommendations);
+    document.getElementById('btn-ai-close').addEventListener('click', closeAiModal);
+    document.getElementById('ai-backdrop').addEventListener('click', closeAiModal);
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeAnalyzeModal();
+      if (e.key === 'Escape') {
+        closeAnalyzeModal();
+        closeAiModal();
+      }
     });
 
     load();

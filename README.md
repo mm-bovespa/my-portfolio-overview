@@ -132,6 +132,52 @@ python -m portfolio_overview.server --password "your-strong-secret"
 - Only a **hash** is stored (PBKDF2-SHA256); the plaintext password is never written to disk.
 - `.local/auth.json` is **gitignored** — do not commit it.
 - Sessions: HttpOnly cookie, 12h sliding expiry, in-process only.
+- For HTTPS tunnels (Cloudflare / ngrok), set `PORTFOLIO_COOKIE_SECURE=1` so login cookies work.
+
+### Public static site (GitHub Pages)
+
+Password-protected **static HTML** deploy (works worldwide, no local server):
+
+1. Build (embeds current holdings, AES-encrypted with your dashboard password):
+   ```powershell
+   python scripts/build_static_site.py --password "YourPassword"
+   ```
+2. Commit the generated `site/` folder and push to `main`.
+3. In GitHub: **Settings → Pages → Source: GitHub Actions**.
+4. Workflow `.github/workflows/deploy-pages.yml` publishes automatically.
+
+Public URL (after first successful deploy):  
+`https://mm-bovespa.github.io/my-portfolio-overview/`
+
+Optional CI rebuild: store secrets `DASHBOARD_PASSWORD` and `PROFILE_JSON`, then run workflow_dispatch with rebuild=true.
+
+### AI Recommendations
+
+Dashboard button **AI Recommendations** runs an institutional-style portfolio critique via **xAI Grok** (`grok-4.5`).
+
+1. Create `C:\projects\my-portfolio-overview\.env` (gitignored):
+   ```
+   XAI_API_KEY=your_key_from_console.x.ai
+   ```
+2. Restart the server.
+3. Log in → click **AI Recommendations** (1–3 minutes; uses live holdings/weights/returns from the dashboard).
+
+Not financial advice — AI-generated analysis only.
+
+### Access from anywhere (temporary public URL)
+
+Keep the local server running, then open an HTTPS tunnel to it (password still required):
+
+```powershell
+# Terminal 1 — dashboard (from project folder)
+$env:PORTFOLIO_COOKIE_SECURE = "1"
+.\.venv\Scripts\python.exe -m portfolio_overview.server --port 8765 --no-browser
+
+# Terminal 2 — public tunnel
+& "C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://127.0.0.1:8765
+```
+
+Cloudflare prints a URL like `https://….trycloudflare.com`. That URL changes each time you restart a **quick** tunnel. For a fixed domain, create a named Cloudflare Tunnel (free account).
 
 ## Privacy
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import threading
 import time
@@ -184,12 +185,44 @@ def parse_cookies(header: str | None) -> dict[str, str]:
     return out
 
 
-def session_cookie_header(token: str, *, max_age: int = SESSION_TTL_SECONDS) -> str:
-    # Localhost over HTTP: no Secure flag (would block cookie on http://127.0.0.1)
-    return (
-        f"{COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={max_age}"
-    )
+def session_cookie_header(
+    token: str,
+    *,
+    max_age: int = SESSION_TTL_SECONDS,
+    secure: bool | None = None,
+) -> str:
+    """Build Set-Cookie for the session.
+
+    ``secure`` defaults from env ``PORTFOLIO_COOKIE_SECURE`` (1/true) — set this
+    when exposing the app via HTTPS reverse proxy / Cloudflare Tunnel / ngrok.
+    On plain http://127.0.0.1 leave Secure off so the browser accepts the cookie.
+    """
+    if secure is None:
+        secure = os.environ.get("PORTFOLIO_COOKIE_SECURE", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+    parts = [
+        f"{COOKIE_NAME}={token}",
+        "Path=/",
+        "HttpOnly",
+        "SameSite=Lax",
+        f"Max-Age={max_age}",
+    ]
+    if secure:
+        parts.append("Secure")
+    return "; ".join(parts)
 
 
-def clear_session_cookie_header() -> str:
-    return f"{COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"
+def clear_session_cookie_header(*, secure: bool | None = None) -> str:
+    if secure is None:
+        secure = os.environ.get("PORTFOLIO_COOKIE_SECURE", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+    parts = [f"{COOKIE_NAME}=", "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"]
+    if secure:
+        parts.append("Secure")
+    return "; ".join(parts)

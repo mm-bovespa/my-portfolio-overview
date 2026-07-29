@@ -128,6 +128,13 @@ def build_dashboard_data(
         currency = live.get("currency") or "USD"
         mv = float(live["market_value_eur"])
         day_pct = live.get("day_change_pct")
+        # Day P&L in EUR ≈ current market value × day %
+        day_eur = None
+        if day_pct is not None:
+            try:
+                day_eur = mv * float(day_pct) / 100.0
+            except (TypeError, ValueError):
+                day_eur = None
 
         purchases = h.get("purchases") or []
         lot_rows: list[dict[str, Any]] = []
@@ -200,6 +207,7 @@ def build_dashboard_data(
                 "price_eur": price_eur,
                 "market_value_eur": mv,
                 "day_change_pct": day_pct,
+                "day_change_eur": day_eur,
                 "avg_cost_eur": h.get("avg_cost_eur"),
                 "buy_date_first": h.get("buy_date"),
                 "avg_buy_date_weighted": (ret_summary or {}).get(

@@ -19,6 +19,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from portfolio_overview.analysis import build_allocation_analysis
+from portfolio_overview.ai_recommendations import run_ai_recommendations
 from portfolio_overview.auth import (
     DEFAULT_AUTH_PATH,
     AuthStore,
@@ -88,6 +89,10 @@ class PortfolioHandler(SimpleHTTPRequestHandler):
         if path in ("/api/analysis", "/api/analysis/"):
             self._serve_json(parsed, kind="analysis")
             return
+        if path in ("/api/ai-recommendations", "/api/ai-recommendations/"):
+            # Prefer POST; allow GET for convenience
+            self._serve_ai_recommendations(parsed)
+            return
         if path in ("/", "/index.html"):
             self.path = "/index.html"
             return super().do_GET()
@@ -104,6 +109,12 @@ class PortfolioHandler(SimpleHTTPRequestHandler):
             return
         if path in ("/api/logout",):
             self._do_logout()
+            return
+        if path in ("/api/ai-recommendations", "/api/ai-recommendations/"):
+            if not self._authenticated():
+                self._json_response(401, {"error": "unauthorized", "login": "/login"})
+                return
+            self._serve_ai_recommendations(parsed)
             return
 
         self._json_response(404, {"error": "not found"})
@@ -265,6 +276,28 @@ class PortfolioHandler(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+    def _serve_ai_recommendations(self, parsed) -> None:
+        qs = parse_qs(parsed.query)
+        use_sample = self.use_sample or qs.get("sample", ["0"])[0] in (
+            "1",
+            "true",
+            "yes",
+        )
+        try:
+            data = run_ai_recommendations(
+                profile_path=self.profile_path,
+                use_sample=use_sample,
+            )
+            self._json_response(200, data)
+        except Exception as exc:
+            self._json_response(
+                500,
+                {
+                    "error": str(exc),
+                    "trace": traceback.format_exc(),
+                },
+            )
 
 
 def main(argv: list[str] | None = None) -> int:

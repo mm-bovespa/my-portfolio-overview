@@ -1,0 +1,76 @@
+name: Deploy Portfolio Site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "static_site/**"
+      - "scripts/build_static_site.py"
+      - "portfolio_overview/**"
+      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
+    inputs:
+      rebuild:
+        description: "Rebuild site from secrets (PROFILE_JSON + DASHBOARD_PASSWORD) before deploy"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Optional rebuild from secrets
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.rebuild == 'true'
+        env:
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+          PROFILE_JSON: ${{ secrets.PROFILE_JSON }}
+        run: |
+          if [ -z "$DASHBOARD_PASSWORD" ] || [ -z "$PROFILE_JSON" ]; then
+            echo "DASHBOARD_PASSWORD and PROFILE_JSON secrets are required for rebuild"
+            exit 1
+          fi
+          python -m pip install --upgrade pip
+          pip install yfinance cryptography
+          python scripts/build_static_site.py --from-profile-json-env
+
+      - name: Verify site folder
+        run: |
+          test -f site/index.html
+          test -f site/data.enc.json
+          ls -la site
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

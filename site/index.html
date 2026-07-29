@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portfolio Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surface: { DEFAULT: '#0f1419', card: '#1a2332', line: '#2a3544', muted: '#8b9cb3' },
+            accent: { DEFAULT: '#3b82f6', good: '#22c55e', bad: '#ef4444' }
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'], mono: ['ui-monospace', 'monospace'] }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; background: #0b0f14; color: #e7eef7; }
+    .mono { font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- LOGIN -->
+  <div id="login-view" class="min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-md">
+      <div class="mb-8 text-center">
+        <p class="text-accent text-xs font-semibold tracking-widest uppercase mb-2">my-portfolio-overview</p>
+        <h1 class="text-2xl font-bold">Dashboard login</h1>
+        <p class="text-surface-muted text-sm mt-2">Password-protected portfolio snapshot (GitHub Pages)</p>
+      </div>
+      <form id="login-form" class="bg-surface-card border border-surface-line rounded-2xl p-6 shadow-xl space-y-5">
+        <div>
+          <label for="password" class="block text-sm text-surface-muted mb-1.5">Password</label>
+          <input id="password" type="password" autocomplete="current-password" required autofocus
+            class="w-full rounded-lg border border-surface-line bg-[#0b0f14] px-3 py-2.5 text-sm outline-none focus:border-accent" />
+        </div>
+        <div id="login-error" class="hidden rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300"></div>
+        <button type="submit" id="btn-login"
+          class="w-full rounded-lg bg-accent hover:bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+          Sign in
+        </button>
+      </form>
+      <p class="text-center text-xs text-surface-muted mt-6">Data is AES-encrypted; only the password unlocks it in this browser.</p>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dash-view" class="hidden max-w-[1200px] mx-auto px-4 py-6 md:px-8 md:py-8">
+    <header class="flex flex-wrap items-start justify-between gap-4 mb-8">
+      <div>
+        <p class="text-accent text-xs font-semibold tracking-widest uppercase mb-1">my-portfolio-overview</p>
+        <h1 class="text-2xl md:text-3xl font-bold">Portfolio Dashboard</h1>
+        <p id="meta" class="text-surface-muted text-sm mt-2 mono">—</p>
+      </div>
+      <button id="btn-logout" class="px-4 py-2 rounded-lg border border-surface-line text-surface-muted hover:text-white text-sm">Log out</button>
+    </header>
+    <section id="cards" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8"></section>
+    <section class="bg-surface-card border border-surface-line rounded-xl overflow-hidden">
+      <div class="px-4 py-3 border-b border-surface-line">
+        <h2 class="font-semibold">Holdings</h2>
+        <p class="text-xs text-surface-muted mt-0.5">Snapshot from your tickers / finance profile (encrypted at rest on this site)</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-xs text-surface-muted border-b border-surface-line">
+            <tr>
+              <th class="text-left px-3 py-2">Ticker</th>
+              <th class="text-right px-3 py-2">Qty</th>
+              <th class="text-right px-3 py-2">Avg €</th>
+              <th class="text-right px-3 py-2">Cost €</th>
+              <th class="text-right px-3 py-2">Price €</th>
+              <th class="text-right px-3 py-2">MV €</th>
+              <th class="text-right px-3 py-2">Wt %</th>
+              <th class="text-right px-3 py-2">Day %</th>
+              <th class="text-right px-3 py-2">Day €</th>
+              <th class="text-right px-3 py-2">Tot %</th>
+              <th class="text-right px-3 py-2">Lots</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+    <p class="text-xs text-surface-muted mt-6">Not financial advice. Static public deploy with password gate.</p>
+  </div>
+
+  <script>
+    const SESSION_KEY = 'portfolio_static_session_v1';
+    const fmt = (n, d = 2) => {
+      if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
+      return Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+    };
+    const fmtPct = (n, d = 1) => {
+      if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
+      const v = Number(n);
+      return (v >= 0 ? '+' : '') + fmt(v, d) + '%';
+    };
+    const cls = (n) => {
+      if (n === null || n === undefined || Number.isNaN(Number(n))) return 'text-surface-muted';
+      return Number(n) >= 0 ? 'text-accent-good' : 'text-accent-bad';
+    };
+
+    function b64ToBytes(b64) {
+      const bin = atob(b64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+
+    async function deriveKey(password, salt, iterations) {
+      const enc = new TextEncoder();
+      const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
+      // Verify hash matches build-time verify field
+      const bits = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+        baseKey,
+        256
+      );
+      const key = await crypto.subtle.importKey(
+        'raw',
+        bits,
+        { name: 'AES-GCM' },
+        false,
+        ['decrypt']
+      );
+      return { key, bits: new Uint8Array(bits) };
+    }
+
+    async function decryptBundle(password, bundle) {
+      const salt = b64ToBytes(bundle.salt);
+      const nonce = b64ToBytes(bundle.nonce);
+      const ct = b64ToBytes(bundle.ciphertext);
+      const verify = b64ToBytes(bundle.verify);
+      const iterations = bundle.iterations || 390000;
+      const { key, bits } = await deriveKey(password, salt, iterations);
+      // constant-time-ish compare
+      if (bits.length !== verify.length) throw new Error('bad password');
+      let diff = 0;
+      for (let i = 0; i < bits.length; i++) diff |= bits[i] ^ verify[i];
+      if (diff !== 0) throw new Error('bad password');
+      const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce }, key, ct);
+      return JSON.parse(new TextDecoder().decode(plain));
+    }
+
+    function normalizeRows(data) {
+      // Live API shape (positions) or holdings-only shape
+      if (data.positions && data.positions.length) {
+        return data.positions.map(p => {
+          const r = p.returns || {};
+          return {
+            ticker: p.ticker,
+            shares: p.shares,
+            avg_cost_eur: p.avg_cost_eur,
+            cost_basis_eur: r.cost_basis_eur,
+            price_eur: p.price_eur,
+            market_value_eur: p.market_value_eur,
+            weight_pct: p.weight_pct,
+            day_change_pct: p.day_change_pct,
+            day_change_eur: p.day_change_eur,
+            total_return_pct: r.total_return_pct,
+            lot_count: p.lot_count,
+          };
+        });
+      }
+      const holdings = data.holdings || [];
+      let totalCost = 0;
+      const rows = holdings.map(h => {
+        const cost = h.cost_basis_eur != null
+          ? Number(h.cost_basis_eur)
+          : (h.avg_cost_eur != null ? Number(h.shares) * Number(h.avg_cost_eur) : null);
+        if (cost) totalCost += cost;
+        return {
+          ticker: h.ticker,
+          shares: h.shares,
+          avg_cost_eur: h.avg_cost_eur,
+          cost_basis_eur: cost,
+          price_eur: null,
+          market_value_eur: null,
+          weight_pct: null,
+          day_change_pct: null,
+          day_change_eur: null,
+          total_return_pct: null,
+          lot_count: h.lot_count || (h.purchases || []).length,
+        };
+      });
+      // weight by cost if no MV
+      if (totalCost > 0) {
+        rows.forEach(r => {
+          if (r.cost_basis_eur != null) r.weight_pct = r.cost_basis_eur / totalCost * 100;
+        });
+      }
+      return rows;
+    }
+
+    function renderDashboard(data) {
+      const rows = normalizeRows(data).sort((a, b) => (b.market_value_eur || b.cost_basis_eur || 0) - (a.market_value_eur || a.cost_basis_eur || 0));
+      const s = data.summary || {};
+      const mv = s.market_value_eur;
+      const cost = s.cost_basis_eur ?? rows.reduce((a, r) => a + (r.cost_basis_eur || 0), 0);
+      const profit = s.profit_eur;
+      const ret = s.total_return_pct;
+
+      document.getElementById('meta').textContent =
+        `As of ${data.as_of || '—'} · ${rows.length} positions` +
+        (data.live_prices === false ? ' · holdings snapshot (no live prices)' : ' · live snapshot') +
+        (data.eurusd ? ` · EURUSD ${Number(data.eurusd).toFixed(4)}` : '');
+
+      document.getElementById('cards').innerHTML = [
+        ['Marktwert', mv != null ? '€ ' + fmt(mv, 0) : '—'],
+        ['Einstand', cost ? '€ ' + fmt(cost, 0) : '—'],
+        ['Gewinn', profit != null ? '€ ' + fmt(profit, 0) : '—'],
+        ['Total Return', ret != null ? fmtPct(ret, 1) : '—'],
+      ].map(([l, v]) => `
+        <div class="bg-surface-card border border-surface-line rounded-xl p-4">
+          <p class="text-xs text-surface-muted uppercase tracking-wide mb-1">${l}</p>
+          <p class="text-lg font-semibold mono">${v}</p>
+        </div>`).join('');
+
+      document.getElementById('tbody').innerHTML = rows.map(r => `
+        <tr class="border-t border-surface-line/60 hover:bg-white/[0.03]">
+          <td class="px-3 py-2 font-semibold">${r.ticker}</td>
+          <td class="px-3 py-2 text-right mono">${fmt(r.shares, r.shares % 1 ? 2 : 0)}</td>
+          <td class="px-3 py-2 text-right mono">${r.avg_cost_eur != null ? fmt(r.avg_cost_eur) : '—'}</td>
+          <td class="px-3 py-2 text-right mono">${r.cost_basis_eur != null ? fmt(r.cost_basis_eur, 0) : '—'}</td>
+          <td class="px-3 py-2 text-right mono">${r.price_eur != null ? fmt(r.price_eur) : '—'}</td>
+          <td class="px-3 py-2 text-right mono font-medium">${r.market_value_eur != null ? fmt(r.market_value_eur, 0) : '—'}</td>
+          <td class="px-3 py-2 text-right mono">${r.weight_pct != null ? fmt(r.weight_pct, 1) + '%' : '—'}</td>
+          <td class="px-3 py-2 text-right mono ${cls(r.day_change_pct)}">${fmtPct(r.day_change_pct, 2)}</td>
+          <td class="px-3 py-2 text-right mono ${cls(r.day_change_eur)}">${r.day_change_eur != null ? ((r.day_change_eur >= 0 ? '+' : '') + fmt(r.day_change_eur, 0)) : '—'}</td>
+          <td class="px-3 py-2 text-right mono ${cls(r.total_return_pct)}">${fmtPct(r.total_return_pct, 1)}</td>
+          <td class="px-3 py-2 text-right mono">${r.lot_count || 0}</td>
+        </tr>`).join('');
+
+      document.getElementById('login-view').classList.add('hidden');
+      document.getElementById('dash-view').classList.remove('hidden');
+    }
+
+    async function trySession() {
+      try {
+        const raw = sessionStorage.getItem(SESSION_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        renderDashboard(data);
+        return true;
+      } catch { return false; }
+    }
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = document.getElementById('login-error');
+      const btn = document.getElementById('btn-login');
+      err.classList.add('hidden');
+      btn.disabled = true;
+      try {
+        const res = await fetch('./data.enc.json?_=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) throw new Error('Could not load encrypted data');
+        const bundle = await res.json();
+        const password = document.getElementById('password').value;
+        const data = await decryptBundle(password, bundle);
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
+        renderDashboard(data);
+      } catch (ex) {
+        err.textContent = ex.message === 'bad password' || (ex.name === 'OperationError')
+          ? 'Wrong password.'
+          : (ex.message || 'Login failed');
+        err.classList.remove('hidden');
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('btn-logout').addEventListener('click', () => {
+      sessionStorage.removeItem(SESSION_KEY);
+      location.reload();
+    });
+
+    trySession();
+  </script>
+</body>
+</html>
